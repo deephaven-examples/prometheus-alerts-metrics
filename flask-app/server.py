@@ -69,8 +69,8 @@ setup_scripts_executed = False
 plots_script = """
 from deephaven import Plot
 
-cat_hist_plot = Plot.catHistPlot("Count By Category", prometheus_alerts.where("Status = `firing`"), "AlertIdentifier").show()
-pie_plot = Plot.piePlot("Percentage By Category", prometheus_alerts.where("Status = `firing`").countBy("Status", "AlertIdentifier"), "AlertIdentifier", "Status").show()
+cat_hist_plot = Plot.catHistPlot("Count By Category", prometheus_alerts.where("Status = `firing`"), "AlertIdentifier").chartTitle("Alert Count By Category").show()
+pie_plot = Plot.piePlot("Percentage By Category", prometheus_alerts.where("Status = `firing`").countBy("Status", "AlertIdentifier"), "AlertIdentifier", "Status").chartTitle("% Of Alerts By Category").show()
 """
 
 @app.route('/', methods=['POST'])
