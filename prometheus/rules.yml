@@ -2,13 +2,26 @@ groups:
 - name: AllInstances
   rules:
   - alert: InstanceTooMuchMemory
-    # Condition for alerting
     expr: go_memstats_alloc_bytes > 30000000
     for: 1s
-    # Annotation - additional informational labels to store more information
     annotations:
       title: 'Instance {{ $labels.instance }} using too much memory'
-      description: '{{ $labels.instance }} of job {{ $labels.job }} has been above the memory threshold for more than 5 seconds.'
-    # Labels - additional labels to be attached to the alert
+      description: '{{ $labels.instance }} of job {{ $labels.job }} has been above the memory threshold for more than 1 second.'
+    labels:
+      severity: 'critical'
+  - alert: InstanceTooMuchHeapIdle
+    expr: go_memstats_heap_idle_bytes > 15000000
+    for: 1s
+    annotations:
+      title: 'Instance {{ $labels.instance }} heap idle too large'
+      description: '{{ $labels.instance }} of job {{ $labels.job }} has been above the heap idle threshold for more than 1 second.'
+    labels:
+      severity: 'critical'
+  - alert: InstanceTooLittleFree
+    expr: go_memstats_frees_total < 500000
+    for: 1s
+    annotations:
+      title: 'Instance {{ $labels.instance }} free space too low'
+      description: '{{ $labels.instance }} of job {{ $labels.job }} has been below the free space threshold for more than 1 second.'
     labels:
       severity: 'critical'

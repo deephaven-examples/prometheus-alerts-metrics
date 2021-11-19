@@ -23,10 +23,8 @@ import requests
 import threading
 import time
 
-PROMETHEUS_QUERIES = ["go_memstats_alloc_bytes"] #Edit this and add your queries here
+PROMETHEUS_QUERIES = ["go_memstats_alloc_bytes", "go_memstats_heap_idle_bytes", "go_memstats_frees_total"] #Edit this and add your queries here
 BASE_URL = "{base}/api/v1/query".format(base="http://prometheus:9090") #Edit this to your base URL if you're not using a local Prometheus instance
-
-ApplicationState = jpy.get_type("io.deephaven.appmode.ApplicationState")
 
 def make_prometheus_request(prometheus_query, query_url):
     """
@@ -62,42 +60,24 @@ def make_prometheus_request(prometheus_query, query_url):
                 results.append((timestamp, job, instance, value))
     return results
 
-prometheus_metrics = None
+column_names = ["PrometheusDateTime", "PrometheusQuery", "Job", "Instance", "Value", "MetricIngestDateTime"]
+column_types = [dht.datetime, dht.string, dht.string, dht.string, dht.double, dht.datetime]
 
-def start_dynamic(app: ApplicationState):
-    """
-    Deephaven Application Mode method that starts the dynamic data collector.
-    """
-    column_names = ["PrometheusDateTime", "PrometheusQuery", "Job", "Instance", "Value", "MetricIngestDateTime"]
-    column_types = [dht.datetime, dht.string, dht.string, dht.string, dht.double, dht.datetime]
+prometheus_metrics_table_writer = DynamicTableWriter(
+    column_names,
+    column_types
+)
 
-    table_writer = DynamicTableWriter(
-        column_names,
-        column_types
-    )
+prometheus_metrics = prometheus_metrics_table_writer.getTable() 
 
-    global prometheus_metrics
-    prometheus_metrics = table_writer.getTable() 
+def thread_func():
+    while True:
+        for prometheus_query in PROMETHEUS_QUERIES:
+            values = make_prometheus_request(prometheus_query, BASE_URL)
 
-    def thread_func():
-        while True:
-            for prometheus_query in PROMETHEUS_QUERIES:
-                values = make_prometheus_request(prometheus_query, BASE_URL)
+            for (date_time, job, instance, value) in values:
+                prometheus_metrics_table_writer.logRow(date_time, prometheus_query, job, instance, value, currentTime())
+        time.sleep(2)
 
-                for (date_time, job, instance, value) in values:
-                    table_writer.logRow(date_time, prometheus_query, job, instance, value, currentTime())
-            time.sleep(0.5)
-
-    app.setField("prometheus_metrics", prometheus_metrics)
-    thread = threading.Thread(target = thread_func)
-    thread.start()
-
-def initialize(func: Callable[[ApplicationState], None]):
-    """
-    Deephaven Application Mode initialization method.
-    """
-    app = jpy.get_type("io.deephaven.appmode.ApplicationContext").get()
-    func(app)
-
-#Start the dynamic data collector
-initialize(start_dynamic)
+thread = threading.Thread(target = thread_func)
+thread.start()

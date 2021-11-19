@@ -20,7 +20,7 @@ while (count < max_count):
         count += 1
 
 if session is None:
-    sys.exit("Failed to connect to Deephaven after 5 attempts")
+    sys.exit(f"Failed to connect to Deephaven after {max_count} attempts")
 
 #Initializes Deephaven with the table and an update method.
 #The session.run_script() method is used to execute Python code in Deephaven.
@@ -29,15 +29,15 @@ from deephaven import DynamicTableWriter
 from deephaven.DBTimeUtils import convertDateTime, currentTime
 import deephaven.Types as dht
 
-table_writer = DynamicTableWriter(
+prometheus_alerts_table_writer = DynamicTableWriter(
     ["PrometheusDateTime", "Job", "Instance", "AlertIdentifier", "Status", "AlertIngestDateTime"],
     [dht.datetime, dht.string, dht.string, dht.string, dht.string, dht.datetime]
 )
-prometheus_alerts = table_writer.getTable()
+prometheus_alerts = prometheus_alerts_table_writer.getTable()
 
 def update_prometheus_alerts(date_time_string, job, instance, alert_identifier, status):
     date_time = convertDateTime(date_time_string)
-    table_writer.logRow(date_time, job, instance, alert_identifier, status, currentTime())
+    prometheus_alerts_table_writer.logRow(date_time, job, instance, alert_identifier, status, currentTime())
 """
 session.run_script(init)
 
@@ -63,7 +63,15 @@ prometheus_alerts_metrics = prometheus_alerts_floored.join(prometheus_metrics_fl
 )
 """
 
-tables_joined = False
+setup_scripts_executed = False
+
+#Script to generate plots
+plots_script = """
+from deephaven import Plot
+
+cat_hist_plot = Plot.catHistPlot("Count By Category", prometheus_alerts.where("Status = `firing`"), "AlertIdentifier").chartTitle("Alert Count By Category").show()
+pie_plot = Plot.piePlot("Percentage By Category", prometheus_alerts.where("Status = `firing`").countBy("Status", "AlertIdentifier"), "AlertIdentifier", "Status").chartTitle("% Of Alerts By Category").show()
+"""
 
 @app.route('/', methods=['POST'])
 def receive_alert():
@@ -91,11 +99,12 @@ def receive_alert():
         session.run_script(update_template.format(date_time_string=date_time_string, job=job, instance=instance,
                 alert_identifier=alert_identifier, status=status))
 
-    #If we haven't already joined the tables into a new table, run that script
-    global tables_joined
-    if not tables_joined:
+    #If we haven't executed the setup scripts, run those
+    global setup_scripts_executed
+    if not setup_scripts_executed:
         session.run_script(join_tables_on_time_stamps)
-        tables_joined = True
+        session.run_script(plots_script)
+        setup_scripts_executed = True
 
     return "Request received"
 
