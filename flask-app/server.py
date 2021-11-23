@@ -71,6 +71,17 @@ from deephaven import Plot
 
 cat_hist_plot = Plot.catHistPlot("Count By Category", prometheus_alerts.where("Status = `firing`"), "AlertIdentifier").chartTitle("Alert Count By Category").show()
 pie_plot = Plot.piePlot("Percentage By Category", prometheus_alerts.where("Status = `firing`").countBy("Status", "AlertIdentifier"), "AlertIdentifier", "Status").chartTitle("% Of Alerts By Category").show()
+
+##Improve this, it's super messy
+line_plot = Plot.plot("go_memstats_alloc_bytes", prometheus_metrics.where("PrometheusQuery = `go_memstats_alloc_bytes`"), "PrometheusDateTime", "Value")\
+    .plot("go_memstats_heap_idle_bytes", prometheus_metrics.where("PrometheusQuery = `go_memstats_heap_idle_bytes`"), "PrometheusDateTime", "Value")\
+    .plot("go_memstats_frees_total", prometheus_metrics.where("PrometheusQuery = `go_memstats_frees_total`"), "PrometheusDateTime", "Value")\
+    .twinX()\
+    .plot("go_memstats_alloc_bytes alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_alloc_bytes`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTimeFloored", "Alarm")\
+    .plot("go_memstats_heap_idle_bytes alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_heap_idle_bytes`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTimeFloored", "Alarm")\
+    .plot("go_memstats_frees_total alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_frees_total`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTimeFloored", "Alarm")\
+    .show()
+
 """
 
 @app.route('/', methods=['POST'])
