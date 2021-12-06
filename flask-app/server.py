@@ -26,7 +26,7 @@ if session is None:
 #The session.run_script() method is used to execute Python code in Deephaven.
 init = """
 from deephaven import DynamicTableWriter
-from deephaven.DBTimeUtils import convertDateTime, currentTime
+from deephaven.DateTimeUtils import convertDateTime, currentTime
 import deephaven.Types as dht
 
 prometheus_alerts_table_writer = DynamicTableWriter(

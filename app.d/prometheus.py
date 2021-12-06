@@ -14,7 +14,7 @@ This table will be updated dynamically.
 """
 from deephaven.TableTools import newTable, stringCol, dateTimeCol, doubleCol
 from deephaven import DynamicTableWriter
-from deephaven.DBTimeUtils import millisToTime, currentTime
+from deephaven.DateTimeUtils import millisToTime, currentTime
 import deephaven.Types as dht
 from typing import Callable
 
