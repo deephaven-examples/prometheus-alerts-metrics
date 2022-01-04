@@ -30,25 +30,25 @@ from deephaven.DateTimeUtils import convertDateTime, currentTime
 import deephaven.Types as dht
 
 prometheus_alerts_table_writer = DynamicTableWriter(
-    ["PrometheusDateTime", "Job", "Instance", "AlertIdentifier", "Status", "AlertIngestDateTime"],
+    ["PrometheusDateTime", "Job", "Instance", "PrometheusQuery", "Status", "AlertIngestDateTime"],
     [dht.datetime, dht.string, dht.string, dht.string, dht.string, dht.datetime]
 )
 prometheus_alerts = prometheus_alerts_table_writer.getTable()
 
-def update_prometheus_alerts(date_time_string, job, instance, alert_identifier, status):
+def update_prometheus_alerts(date_time_string, job, instance, prometheus_query, status):
     date_time = convertDateTime(date_time_string)
-    prometheus_alerts_table_writer.logRow(date_time, job, instance, alert_identifier, status, currentTime())
+    prometheus_alerts_table_writer.logRow(date_time, job, instance, prometheus_query, status, currentTime())
 """
 session.run_script(init)
 
 #Template to trigger the table update
 update_template = """
-update_prometheus_alerts("{date_time_string}", "{job}", "{instance}", "{alert_identifier}", "{status}")
+update_prometheus_alerts("{date_time_string}", "{job}", "{instance}", "{prometheus_query}", "{status}")
 """
 
 #Template to join the 2 dynamic tables on time stamps
 join_tables_on_time_stamps = """
-nanos_bin = 500000000 #We want to floor our Prometheus time stamps to half a second
+nanos_bin = 2000000000 #We want to floor our Prometheus time stamps to 2 seconds. This guarantees overlap in our times
 
 prometheus_alerts_floored = prometheus_alerts.update(
     "PrometheusDateTimeFloored = lowerBin(PrometheusDateTime, nanos_bin)"
@@ -58,7 +58,7 @@ prometheus_metrics_floored = prometheus_metrics.update(
     "PrometheusDateTimeFloored = lowerBin(PrometheusDateTime, nanos_bin)"
 ).dropColumns("PrometheusDateTime")
 
-prometheus_alerts_metrics = prometheus_alerts_floored.join(prometheus_metrics_floored, "PrometheusDateTimeFloored, Job, Instance").update(
+prometheus_alerts_metrics = prometheus_alerts_floored.join(prometheus_metrics_floored, "PrometheusDateTimeFloored, Job, Instance, PrometheusQuery").update(
     "Delay = format(minus(AlertIngestDateTime, MetricIngestDateTime))"
 )
 """
@@ -69,10 +69,9 @@ setup_scripts_executed = False
 plots_script = """
 from deephaven import Plot
 
-cat_hist_plot = Plot.catHistPlot("Count By Category", prometheus_alerts.where("Status = `firing`"), "AlertIdentifier").chartTitle("Alert Count By Category").show()
-pie_plot = Plot.piePlot("Percentage By Category", prometheus_alerts.where("Status = `firing`").countBy("Status", "AlertIdentifier"), "AlertIdentifier", "Status").chartTitle("% Of Alerts By Category").show()
+cat_hist_plot = Plot.catHistPlot("Count By Category", prometheus_alerts.where("Status = `firing`"), "PrometheusQuery").chartTitle("Alert Count By Category").show()
+pie_plot = Plot.piePlot("Percentage By Category", prometheus_alerts.where("Status = `firing`").countBy("Status", "PrometheusQuery"), "PrometheusQuery", "Status").chartTitle("% Of Alerts By Category").show()
 
-##Improve this, it's super messy
 line_plot = Plot.plot("go_memstats_alloc_bytes", prometheus_metrics.where("PrometheusQuery = `go_memstats_alloc_bytes`"), "PrometheusDateTime", "Value")\
     .plot("go_memstats_heap_idle_bytes", prometheus_metrics.where("PrometheusQuery = `go_memstats_heap_idle_bytes`"), "PrometheusDateTime", "Value")\
     .plot("go_memstats_frees_total", prometheus_metrics.where("PrometheusQuery = `go_memstats_frees_total`"), "PrometheusDateTime", "Value")\
@@ -90,7 +89,7 @@ def receive_alert():
     date_time_string = None
     job = None
     instance = None
-    alert_identifier = None
+    prometheus_query = None
     status = None
 
     #For every alert, build the method call to update the alerts table
@@ -104,11 +103,11 @@ def receive_alert():
             date_time_string = alert["endsAt"][0:-1] + " UTC"
         job = alert["labels"]["job"]
         instance = alert["labels"]["instance"]
-        alert_identifier = alert["labels"]["alertname"]
+        prometheus_query = alert["labels"]["alertname"]
 
         #Executes the alert table update in Deephaven
         session.run_script(update_template.format(date_time_string=date_time_string, job=job, instance=instance,
-                alert_identifier=alert_identifier, status=status))
+                prometheus_query=prometheus_query, status=status))
 
     #If we haven't executed the setup scripts, run those
     global setup_scripts_executed
