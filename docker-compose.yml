@@ -58,7 +58,7 @@ services:
       - "9090:9090"
 
   flask-app:
-    image: flask/prometheus-webhook-alerts:latest
+    image: local-flask/prometheus-webhook-alerts:latest
     depends_on:
       - envoy
     ports:
