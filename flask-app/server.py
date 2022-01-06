@@ -48,19 +48,7 @@ update_prometheus_alerts("{date_time_string}", "{job}", "{instance}", "{promethe
 
 #Template to join the 2 dynamic tables on time stamps
 join_tables_on_time_stamps = """
-nanos_bin = 2000000000 #We want to floor our Prometheus time stamps to 2 seconds. This guarantees overlap in our times
-
-prometheus_alerts_floored = prometheus_alerts.update(
-    "PrometheusDateTimeFloored = lowerBin(PrometheusDateTime, nanos_bin)"
-).dropColumns("PrometheusDateTime")
-
-prometheus_metrics_floored = prometheus_metrics.update(
-    "PrometheusDateTimeFloored = lowerBin(PrometheusDateTime, nanos_bin)"
-).dropColumns("PrometheusDateTime")
-
-prometheus_alerts_metrics = prometheus_alerts_floored.join(prometheus_metrics_floored, "PrometheusDateTimeFloored, Job, Instance, PrometheusQuery").update(
-    "Delay = format(minus(AlertIngestDateTime, MetricIngestDateTime))"
-)
+prometheus_alerts_metrics = prometheus_alerts.aj(prometheus_metrics, "Job, Instance, PrometheusQuery, PrometheusDateTime", "Value, MetricTimeStamp = PrometheusDateTime")
 """
 
 setup_scripts_executed = False
@@ -76,9 +64,9 @@ line_plot = Plot.plot("go_memstats_alloc_bytes", prometheus_metrics.where("Prome
     .plot("go_memstats_heap_idle_bytes", prometheus_metrics.where("PrometheusQuery = `go_memstats_heap_idle_bytes`"), "PrometheusDateTime", "Value")\
     .plot("go_memstats_frees_total", prometheus_metrics.where("PrometheusQuery = `go_memstats_frees_total`"), "PrometheusDateTime", "Value")\
     .twinX()\
-    .plot("go_memstats_alloc_bytes alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_alloc_bytes`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTimeFloored", "Alarm")\
-    .plot("go_memstats_heap_idle_bytes alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_heap_idle_bytes`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTimeFloored", "Alarm")\
-    .plot("go_memstats_frees_total alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_frees_total`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTimeFloored", "Alarm")\
+    .plot("go_memstats_alloc_bytes alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_alloc_bytes`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTime", "Alarm")\
+    .plot("go_memstats_heap_idle_bytes alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_heap_idle_bytes`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTime", "Alarm")\
+    .plot("go_memstats_frees_total alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_frees_total`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTime", "Alarm")\
     .show()
 
 """
