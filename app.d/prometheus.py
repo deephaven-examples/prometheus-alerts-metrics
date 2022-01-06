@@ -77,7 +77,7 @@ def thread_func():
 
             for (date_time, job, instance, value) in values:
                 prometheus_metrics_table_writer.logRow(date_time, prometheus_query, job, instance, value, currentTime())
-        time.sleep(2)
+        time.sleep(0.5)
 
 thread = threading.Thread(target = thread_func)
 thread.start()

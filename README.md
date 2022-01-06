@@ -35,7 +35,7 @@ This part of the app pulls data from [Prometheus's API](https://prometheus.io/do
 
 ### Combining tables
 
-Once the two tables are created, they are combined using a [join operation](https://deephaven.io/core/docs/reference/table-operations/join/join/) in order to display a table that shows the values of the Prometheus queries at the time when an alert was either fired or resolved.
+Once the two tables are created, they are combined using an [as-of join operation](https://deephaven.io/core/docs/reference/table-operations/join/aj/) in order to display a table that shows the values of the Prometheus queries at the time when an alert was either fired or resolved.
 
 The metrics table contains the following columns:
 
@@ -43,15 +43,9 @@ The metrics table contains the following columns:
 
 The alerts table contains the following columns:
 
-`PrometheusDateTime, Job, Instance, AlertIdentifier, Status, AlertIngestDateTime`
+`PrometheusDateTime, Job, Instance, PrometheusQuery, Status, AlertIngestDateTime`
 
-The tables are combined on the `Job`, `Instance`, and the computed `PrometheusDateTimeFloored` columns.
-
-#### `lowerBin`
-
-Prometheus sends a timestamp with its alert webhooks, and includes a timestamp when querying metrics data. We store this in the `PrometheusDateTime` column. This is useful for mapping our metrics to an alert, but since we are querying our metrics on a timed cadence, we can't guarantee that the alert's timestamp will match our query's timestamp. So how do we map a query metric to an alert? We can use [lowerBin](https://deephaven.io/core/docs/reference/time/datetime/lowerBin/) to "floor" our timestamps. This example floors the timestamps to the nearest half second. This works because we pull data on half second intervals, and Prometheus's alertmanager is configured to check every second before determining if an alert should be fired or resolved.
-
-This app uses `lowerBin` to compute the `PrometheusDateTimeFloored` column.
+The tables are combined on the `Job`, `Instance`, `PrometheusQuery` and the `PrometheusDateTime` columns. Since the `PrometheusDateTime` isn't guaranteed to have overlap and we want to join on the closest values, we use this as the last parameter in our as-of join.
 
 ## Dependencies
 
