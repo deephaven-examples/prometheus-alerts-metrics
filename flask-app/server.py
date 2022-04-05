@@ -26,18 +26,22 @@ if session is None:
 #The session.run_script() method is used to execute Python code in Deephaven.
 init = """
 from deephaven import DynamicTableWriter
-from deephaven.DateTimeUtils import convertDateTime, currentTime
-import deephaven.Types as dht
+from deephaven.time import to_datetime, now
+import deephaven.dtypes as dht
 
-prometheus_alerts_table_writer = DynamicTableWriter(
-    ["PrometheusDateTime", "Job", "Instance", "PrometheusQuery", "Status", "AlertIngestDateTime"],
-    [dht.datetime, dht.string, dht.string, dht.string, dht.string, dht.datetime]
-)
-prometheus_alerts = prometheus_alerts_table_writer.getTable()
+prometheus_alerts_table_writer = DynamicTableWriter({
+    "PrometheusDateTime": dht.DateTime,
+    "Job": dht.string,
+    "Instance": dht.string,
+    "PrometheusQuery": dht.string,
+    "Status": dht.string,
+    "AlertIngestDateTime": dht.DateTime
+})
+prometheus_alerts = prometheus_alerts_table_writer.table
 
 def update_prometheus_alerts(date_time_string, job, instance, prometheus_query, status):
-    date_time = convertDateTime(date_time_string)
-    prometheus_alerts_table_writer.logRow(date_time, job, instance, prometheus_query, status, currentTime())
+    date_time = to_datetime(date_time_string)
+    prometheus_alerts_table_writer.write_row(date_time, job, instance, prometheus_query, status, now())
 """
 session.run_script(init)
 
@@ -48,25 +52,25 @@ update_prometheus_alerts("{date_time_string}", "{job}", "{instance}", "{promethe
 
 #Template to join the 2 dynamic tables on time stamps
 join_tables_on_time_stamps = """
-prometheus_alerts_metrics = prometheus_alerts.aj(prometheus_metrics, "Job, Instance, PrometheusQuery, PrometheusDateTime", "Value, MetricTimeStamp = PrometheusDateTime")
+prometheus_alerts_metrics = prometheus_alerts.aj(table=prometheus_metrics, on=["Job", "Instance", "PrometheusQuery", "PrometheusDateTime"], joins=["Value", "MetricTimeStamp = PrometheusDateTime"])
 """
 
 setup_scripts_executed = False
 
 #Script to generate plots
 plots_script = """
-from deephaven import Plot
+from deephaven.plot.figure import Figure
 
-cat_hist_plot = Plot.catHistPlot("Count By Category", prometheus_alerts.where("Status = `firing`"), "PrometheusQuery").chartTitle("Alert Count By Category").show()
-pie_plot = Plot.piePlot("Percentage By Category", prometheus_alerts.where("Status = `firing`").countBy("Status", "PrometheusQuery"), "PrometheusQuery", "Status").chartTitle("% Of Alerts By Category").show()
+cat_hist_plot = Figure().plot_cat_hist(series_name="Count By Category", t=prometheus_alerts.where(["Status = `firing`"]), category="PrometheusQuery").chart_title(title="Alert Count By Category").show()
+pie_plot = Figure().plot_pie(series_name="Percentage By Category", t=prometheus_alerts.where(["Status = `firing`"]).count_by(col="Status", by=["PrometheusQuery"]), category="PrometheusQuery", y="Status").chart_title(title="% Of Alerts By Category").show()
 
-line_plot = Plot.plot("go_memstats_alloc_bytes", prometheus_metrics.where("PrometheusQuery = `go_memstats_alloc_bytes`"), "PrometheusDateTime", "Value")\
-    .plot("go_memstats_heap_idle_bytes", prometheus_metrics.where("PrometheusQuery = `go_memstats_heap_idle_bytes`"), "PrometheusDateTime", "Value")\
-    .plot("go_memstats_frees_total", prometheus_metrics.where("PrometheusQuery = `go_memstats_frees_total`"), "PrometheusDateTime", "Value")\
-    .twinX()\
-    .plot("go_memstats_alloc_bytes alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_alloc_bytes`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTime", "Alarm")\
-    .plot("go_memstats_heap_idle_bytes alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_heap_idle_bytes`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTime", "Alarm")\
-    .plot("go_memstats_frees_total alarm", prometheus_alerts_metrics.where("PrometheusQuery = `go_memstats_frees_total`").update("Alarm = Status.equals(`firing`) ? 1 : 0"), "PrometheusDateTime", "Alarm")\
+line_plot = Figure().plot_xy(series_name="go_memstats_alloc_bytes", t=prometheus_metrics.where(["PrometheusQuery = `go_memstats_alloc_bytes`"]), x="PrometheusDateTime", y="Value")\
+    .plot_xy(series_name="go_memstats_heap_idle_bytes", t=prometheus_metrics.where(["PrometheusQuery = `go_memstats_heap_idle_bytes`"]), x="PrometheusDateTime", y="Value")\
+    .plot_xy(series_name="go_memstats_frees_total", t=prometheus_metrics.where(["PrometheusQuery = `go_memstats_frees_total`"]), x="PrometheusDateTime", y="Value")\
+    .x_twin()\
+    .plot_xy(series_name="go_memstats_alloc_bytes alarm", t=prometheus_alerts_metrics.where(["PrometheusQuery = `go_memstats_alloc_bytes`"]).update(["Alarm = Status.equals(`firing`) ? 1 : 0"]), x="PrometheusDateTime", y="Alarm")\
+    .plot_xy(series_name="go_memstats_heap_idle_bytes alarm", t=prometheus_alerts_metrics.where(["PrometheusQuery = `go_memstats_heap_idle_bytes`"]).update(["Alarm = Status.equals(`firing`) ? 1 : 0"]), x="PrometheusDateTime", y="Alarm")\
+    .plot_xy(series_name="go_memstats_frees_total alarm", t=prometheus_alerts_metrics.where(["PrometheusQuery = `go_memstats_frees_total`"]).update(["Alarm = Status.equals(`firing`) ? 1 : 0"]), x="PrometheusDateTime", y="Alarm")\
     .show()
 
 """
