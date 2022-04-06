@@ -12,11 +12,9 @@ This table will be updated dynamically.
 @author Jake Mulford
 @copyright Deephaven Data Labs LLC
 """
-from deephaven.TableTools import newTable, stringCol, dateTimeCol, doubleCol
 from deephaven import DynamicTableWriter
-from deephaven.DateTimeUtils import millisToTime, currentTime
-import deephaven.Types as dht
-from typing import Callable
+from deephaven.time import millis_to_datetime, now
+import deephaven.dtypes as dht
 
 import requests
 
@@ -52,23 +50,26 @@ def make_prometheus_request(prometheus_query, query_url):
         if "resultType" in response_json["data"] and response_json["data"]["resultType"] == "vector":
             for result in response_json["data"]["result"]:
                 #Prometheus timestamps are in seconds. We multiply by 1000 to convert it to
-                #milliseconds, then cast to an int() to use the millisToTime() method
-                timestamp = millisToTime(int(result["value"][0] * 1000))
+                #milliseconds, then cast to an int() to use the millis_to_datetime() method
+                timestamp = millis_to_datetime(int(result["value"][0] * 1000))
                 job = result["metric"]["job"]
                 instance = result["metric"]["instance"]
                 value = float(result["value"][1])
                 results.append((timestamp, job, instance, value))
     return results
 
-column_names = ["PrometheusDateTime", "PrometheusQuery", "Job", "Instance", "Value", "MetricIngestDateTime"]
-column_types = [dht.datetime, dht.string, dht.string, dht.string, dht.double, dht.datetime]
+dynamic_table_writer_columns = {
+    "PrometheusDateTime": dht.DateTime,
+    "PrometheusQuery": dht.string,
+    "Job": dht.string,
+    "Instance": dht.string,
+    "Value": dht.double,
+    "MetricIngestDateTime": dht.DateTime
+}
 
-prometheus_metrics_table_writer = DynamicTableWriter(
-    column_names,
-    column_types
-)
+prometheus_metrics_table_writer = DynamicTableWriter(dynamic_table_writer_columns)
 
-prometheus_metrics = prometheus_metrics_table_writer.getTable() 
+prometheus_metrics = prometheus_metrics_table_writer.table
 
 def thread_func():
     while True:
@@ -76,7 +77,7 @@ def thread_func():
             values = make_prometheus_request(prometheus_query, BASE_URL)
 
             for (date_time, job, instance, value) in values:
-                prometheus_metrics_table_writer.logRow(date_time, prometheus_query, job, instance, value, currentTime())
+                prometheus_metrics_table_writer.write_row(date_time, prometheus_query, job, instance, value, now())
         time.sleep(0.5)
 
 thread = threading.Thread(target = thread_func)
