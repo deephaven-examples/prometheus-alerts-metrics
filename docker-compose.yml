@@ -2,7 +2,7 @@ version: "3.4"
 
 services:
   server:
-    image: prometheus-deephaven/server:latest
+    build: .
     expose:
       - '8080'
     volumes:
@@ -58,7 +58,7 @@ services:
       - "9090:9090"
 
   flask-app:
-    image: flask/prometheus-webhook-alerts:latest
+    build: ./flask-app
     depends_on:
       - envoy
     ports:
