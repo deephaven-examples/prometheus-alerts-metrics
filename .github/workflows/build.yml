@@ -18,7 +18,7 @@ jobs:
       - name: Build
         run: sh prometheusDhAlertMetricsStart.sh -d
       - name: Validate tables
-        uses: deephaven/action-assert-dh-tables-present@v1
+        uses: deephaven/action-assert-dh-tables-present@v1.1.1
         with:
           table-names: prometheus_alerts,prometheus_metrics
           host: localhost
